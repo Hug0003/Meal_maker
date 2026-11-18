@@ -19,7 +19,7 @@ CMD ["npm", "run", "dev", "-w", "@meal/web"]
 FROM dev AS build
 RUN npm run build -w @meal/web
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 8080
