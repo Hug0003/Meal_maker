@@ -64,7 +64,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -191,7 +191,7 @@ jobs:
           if [ "$fail" != 0 ]; then docker compose -p "$PROJECT" -f docker-compose.yml logs; exit 1; fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
