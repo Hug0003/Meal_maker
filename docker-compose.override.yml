@@ -1,0 +1,46 @@
+# Mode développement (chargé automatiquement par « docker compose up ») :
+# rechargement à chaud de l'API (tsx watch) et du front (Vite), code monté depuis le disque.
+# Pour lancer la version de production en local : docker compose -f docker-compose.yml up --build
+services:
+  postgres:
+    ports:
+      - '127.0.0.1:55432:5432'
+
+  redis:
+    ports:
+      - '127.0.0.1:56379:6379'
+
+  api:
+    image: meal-maker-api:dev
+    build:
+      target: dev
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./apps/api/prisma:/app/apps/api/prisma
+      - ./packages/shared/src:/app/packages/shared/src
+    ports:
+      - '127.0.0.1:53000:3000'
+
+  web:
+    image: meal-maker-web:dev
+    build:
+      target: dev
+    environment:
+      VITE_API_PROXY: http://api:3000
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+      - ./apps/web/public:/app/apps/web/public
+      - ./apps/web/index.html:/app/apps/web/index.html
+      - ./packages/shared/src:/app/packages/shared/src
+    ports: !override
+      - '${WEB_PORT:-8080}:5173'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:5173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]

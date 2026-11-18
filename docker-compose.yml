@@ -1,0 +1,95 @@
+# Meal Maker — pile complète, comme en production.
+#   web      Nginx : sert le front React et relaie /api vers l'API (seul port exposé)
+#   api      Fastify + Prisma : applique les migrations et le seed au démarrage
+#   postgres données (volume meal-pg)
+#   redis    cache, rate-limit
+# En local, docker-compose.override.yml ajoute le rechargement à chaud (voir README).
+name: meal-maker
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-meal}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-meal}
+      POSTGRES_DB: ${POSTGRES_DB:-meal_maker}
+    volumes:
+      - meal-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      [
+        'redis-server',
+        '--save',
+        '',
+        '--appendonly',
+        'no',
+        '--maxmemory',
+        '128mb',
+        '--maxmemory-policy',
+        'allkeys-lru',
+      ]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    image: ${API_IMAGE:-ghcr.io/hug0003/meal-maker-api:latest}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-meal}:${POSTGRES_PASSWORD:-meal}@postgres:5432/${POSTGRES_DB:-meal_maker}
+      REDIS_URL: redis://redis:6379
+      APP_PASSWORD: ${APP_PASSWORD:-}
+      COOKIE_SECRET: ${COOKIE_SECRET:-change-me-with-a-long-random-string-please}
+      IMPORT_MEALDB: ${IMPORT_MEALDB:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/hug0003/meal-maker-web:latest}
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - '${WEB_PORT:-8080}:8080'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/healthz']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  meal-pg:

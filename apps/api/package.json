@@ -1,0 +1,32 @@
+{
+  "name": "@meal/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "prisma migrate deploy && tsx src/scripts/seed.ts && tsx watch src/server.ts",
+    "build": "prisma generate && tsup",
+    "start": "node dist/server.js",
+    "typecheck": "prisma generate && tsc -p tsconfig.json",
+    "test": "vitest run",
+    "seed": "tsx src/scripts/seed.ts",
+    "import:mealdb": "tsx src/scripts/import-mealdb.ts",
+    "check:seed": "tsx src/scripts/check-seed.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "@prisma/client": "^6.16.0",
+    "fastify": "^5.4.0",
+    "ioredis": "^5.6.1",
+    "prisma": "^6.16.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@meal/shared": "*",
+    "@types/node": "^22.15.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.0",
+    "vitest": "^3.2.0"
+  }
+}

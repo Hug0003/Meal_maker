@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+.git
+.github
+.env
+*.md
+**/playwright-report
+**/test-results
+apps/web/e2e

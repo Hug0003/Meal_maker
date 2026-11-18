@@ -1,0 +1,126 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+  --bg: #fff8ee;
+  --surface: #ffffff;
+  --surface-2: #fff1e0;
+  --ink: #2b2340;
+  --muted: #6f6585;
+  --line: #f0e3d0;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #17131f;
+  --surface: #221c2e;
+  --surface-2: #2c2440;
+  --ink: #f6f0e8;
+  --muted: #b0a6c2;
+  --line: #3a3050;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+}
+
+@theme {
+  --color-tomato: #ff6150;
+  --color-mango: #ffb53d;
+  --color-mint: #2fbf98;
+  --color-berry: #e6457a;
+  --color-sky: #4ba8f5;
+  --color-grape: #8e6cf0;
+  --color-peach: #ff9466;
+  --color-lime: #8cc63f;
+  --font-display: 'Fredoka Variable', 'Nunito Variable', system-ui, sans-serif;
+  --font-sans: 'Nunito Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --radius-blob: 1.75rem;
+}
+
+html {
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-grape);
+  outline-offset: 2px;
+  border-radius: 0.75rem;
+}
+
+/* Couleurs de cartes : chaque recette porte une teinte (--c). */
+.tint-tomato {
+  --c: var(--color-tomato);
+}
+.tint-mango {
+  --c: var(--color-mango);
+}
+.tint-mint {
+  --c: var(--color-mint);
+}
+.tint-berry {
+  --c: var(--color-berry);
+}
+.tint-sky {
+  --c: var(--color-sky);
+}
+.tint-grape {
+  --c: var(--color-grape);
+}
+.tint-peach {
+  --c: var(--color-peach);
+}
+.tint-lime {
+  --c: var(--color-lime);
+}
+
+.blob-bg {
+  background:
+    radial-gradient(circle at 20% 15%, color-mix(in srgb, white 35%, transparent) 0 18%, transparent 19%),
+    radial-gradient(circle at 85% 80%, color-mix(in srgb, white 20%, transparent) 0 22%, transparent 23%),
+    linear-gradient(135deg, color-mix(in srgb, var(--c) 70%, white), var(--c));
+}
+
+.soft-bg {
+  background: color-mix(in srgb, var(--c) 14%, var(--surface));
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,140 @@
+// Meal Maker — un seul utilisateur, donc pas de table User : l'état (notes, frigo, planning) est global.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Recipe {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique
+  title       String
+  description String   @default("")
+  emoji       String   @default("🍽️")
+  color       String   @default("mango")
+  imageUrl    String?
+  category    String
+  cuisine     String
+  moods       String[]
+  diets       String[]
+  seasons     String[]
+  prepMinutes Int
+  cookMinutes Int
+  servings    Int
+  difficulty  Int      @default(1)
+  cost        Int      @default(1)
+  tips        String?
+  steps       Json
+  /// seed | themealdb | perso
+  source      String   @default("perso")
+  lang        String   @default("fr")
+  externalId  String?  @unique
+  /// Renseigné pour « ma version » d'une recette du catalogue.
+  parentId    Int?     @unique
+  parent      Recipe?  @relation("Versions", fields: [parentId], references: [id], onDelete: Cascade)
+  version     Recipe?  @relation("Versions")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ingredients RecipeIngredient[]
+  state       RecipeState?
+  cookLogs    CookLog[]
+  weeklyPicks WeeklyPick[]
+  planEntries MealPlanEntry[]
+
+  @@index([category])
+  @@index([cuisine])
+}
+
+model Ingredient {
+  id             Int     @id @default(autoincrement())
+  name           String
+  normalizedName String  @unique
+  aisle          String  @default("autre")
+  /// Basique supposé toujours présent (sel, poivre, huile…) : ignoré par le filtre frigo.
+  isStaple       Boolean @default(false)
+
+  recipes RecipeIngredient[]
+  fridge  FridgeItem?
+}
+
+model RecipeIngredient {
+  id           Int        @id @default(autoincrement())
+  recipeId     Int
+  ingredientId Int
+  quantity     Float?
+  unit         String?
+  note         String?
+  optional     Boolean    @default(false)
+  position     Int        @default(0)
+  recipe       Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@index([recipeId])
+  @@index([ingredientId])
+}
+
+model RecipeState {
+  recipeId     Int       @id
+  /// done | to_try | not_for_me
+  status       String?
+  rating       Int?
+  favorite     Boolean   @default(false)
+  timesCooked  Int       @default(0)
+  lastCookedAt DateTime?
+  notes        String?
+  updatedAt    DateTime  @updatedAt
+  recipe       Recipe    @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+}
+
+model CookLog {
+  id       Int      @id @default(autoincrement())
+  recipeId Int
+  cookedAt DateTime @default(now())
+  recipe   Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId])
+}
+
+model FridgeItem {
+  ingredientId Int        @id
+  addedAt      DateTime   @default(now())
+  expiresAt    DateTime?  @db.Date
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+}
+
+model WeeklyPick {
+  /// Semaine ISO, ex. 2026-W47
+  week      String   @id
+  recipeId  Int
+  reason    String   @default("")
+  createdAt DateTime @default(now())
+  recipe    Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+}
+
+model MealPlanEntry {
+  id       Int      @id @default(autoincrement())
+  date     DateTime @db.Date
+  /// midi | soir
+  slot     String
+  recipeId Int
+  servings Int
+  recipe   Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([date])
+}
+
+model ShoppingItem {
+  id        Int      @id @default(autoincrement())
+  label     String
+  quantity  String?
+  aisle     String   @default("autre")
+  checked   Boolean  @default(false)
+  fromPlan  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
