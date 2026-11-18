@@ -6,6 +6,10 @@ name: CI
 #      production (sans fichier override), parcours Playwright de bout en bout ;
 #   3. publication sur ghcr.io/hug0003/meal-maker-{api,web} (:latest et :<sha>) hors pull requests.
 # Pas encore de déploiement automatique : voir « Déploiement » dans le README pour le brancher sur sites-infra.
+#
+# Runner : comme le portfolio, variable de dépôt RUNS_ON (ex. self-hosted) sinon ubuntu-latest.
+# Prévu pour un runner auto-hébergé partagé : aucun port hôte fixe, noms/tags propres au run, rien ne
+# reste après le run, et seuls Docker, git et curl sont supposés présents sur le serveur.
 on:
   push:
     branches: [main]
@@ -35,22 +39,29 @@ jobs:
           POSTGRES_USER: meal
           POSTGRES_PASSWORD: meal
           POSTGRES_DB: meal_test
-        ports: ['5432:5432']
+        # Port hôte aléatoire : pas de conflit avec un Postgres/Redis déjà présent sur le serveur.
+        ports: ['5432']
         options: >-
           --health-cmd "pg_isready -U meal" --health-interval 5s --health-timeout 5s --health-retries 20
       redis:
         image: redis:7-alpine
-        ports: ['6379:6379']
+        ports: ['6379']
         options: >-
           --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
-    env:
-      TEST_DATABASE_URL: postgresql://meal:meal@localhost:5432/meal_test
-      DATABASE_URL: postgresql://meal:meal@localhost:5432/meal_test
-      REDIS_URL: redis://localhost:6379
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Service URLs
+        run: |
+          PG="postgresql://meal:meal@127.0.0.1:${{ job.services.postgres.ports['5432'] }}"
+          {
+            echo "PG_BASE=$PG"
+            echo "TEST_DATABASE_URL=$PG/meal_test"
+            echo "DATABASE_URL=$PG/meal_test"
+            echo "REDIS_URL=redis://127.0.0.1:${{ job.services.redis.ports['6379'] }}"
+          } >> "$GITHUB_ENV"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -79,15 +90,13 @@ jobs:
       # Le schéma Prisma et les migrations doivent rester alignés.
       - name: Migrations up to date
         run: |
-          psql "postgresql://meal@localhost:5432/meal_test" -c 'CREATE DATABASE meal_shadow'
+          docker exec ${{ job.services.postgres.id }} psql -U meal -d meal_test -c 'CREATE DATABASE meal_shadow'
           npx prisma migrate diff \
             --from-migrations apps/api/prisma/migrations \
             --to-schema-datamodel apps/api/prisma/schema.prisma \
-            --shadow-database-url "postgresql://meal:meal@localhost:5432/meal_shadow" \
+            --shadow-database-url "$PG_BASE/meal_shadow" \
             --exit-code \
             || { echo "::error::Le schéma Prisma a changé sans migration (npx prisma migrate dev)."; exit 1; }
-        env:
-          PGPASSWORD: meal
 
   build:
     needs: checks
@@ -112,7 +121,7 @@ jobs:
           target: runtime
           platforms: linux/amd64
           load: true
-          tags: ${{ env.IMAGE_API }}:test
+          tags: ${{ env.IMAGE_API }}:ci-${{ github.run_id }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
 
@@ -124,15 +133,15 @@ jobs:
           target: runtime
           platforms: linux/amd64
           load: true
-          tags: ${{ env.IMAGE_WEB }}:test
+          tags: ${{ env.IMAGE_WEB }}:ci-${{ github.run_id }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
 
       # Lance la pile complète comme en production et vérifie chaque point d'entrée.
       - name: Smoke test
         env:
-          API_IMAGE: ${{ env.IMAGE_API }}:test
-          WEB_IMAGE: ${{ env.IMAGE_WEB }}:test
+          API_IMAGE: ${{ env.IMAGE_API }}:ci-${{ github.run_id }}
+          WEB_IMAGE: ${{ env.IMAGE_WEB }}:ci-${{ github.run_id }}
           # Port hôte aléatoire sur 127.0.0.1 : aucun conflit possible sur un runner auto-hébergé partagé.
           WEB_PORT: '127.0.0.1:'
           POSTGRES_PASSWORD: ci-${{ github.run_id }}
@@ -166,8 +175,8 @@ jobs:
           check /.git/config 404
           check /index.html.map 404
 
-          total=$(curl -s "$BASE/api/recipes?pageSize=1" | jq .total)
-          if [ "$total" -gt 150 ]; then echo "OK    $total recettes"; else echo "ÉCHEC seulement $total recettes"; fail=1; fi
+          total=$(curl -s "$BASE/api/recipes?pageSize=1" | grep -o '"total":[0-9]*' | cut -d: -f2)
+          if [ "${total:-0}" -gt 150 ]; then echo "OK    $total recettes"; else echo "ÉCHEC seulement $total recettes"; fail=1; fi
 
           echo "--- En-têtes"
           for p in / /recette/1 /api/health; do
@@ -187,11 +196,17 @@ jobs:
           node-version: 22
           cache: npm
 
+      # Navigateurs fournis par l'image officielle Playwright (même version que le lockfile) :
+      # rien à installer sur le serveur (pas de sudo / apt). Réseau hôte pour joindre 127.0.0.1:<port>.
       - name: End-to-end tests (Playwright)
         run: |
           npm ci --no-audit --no-fund --ignore-scripts
-          npx playwright install --with-deps chromium
-          npm run test:e2e
+          PW_VERSION=$(node -p "require('@playwright/test/package.json').version")
+          docker run --rm --network host --ipc host \
+            --user "$(id -u):$(id -g)" -e HOME=/tmp -e CI=true -e BASE_URL="$BASE_URL" \
+            -v "$PWD:/work" -w /work/apps/web \
+            "mcr.microsoft.com/playwright:v$PW_VERSION-noble" \
+            npx playwright test --project desktop --project mobile
 
       - name: Upload Playwright report
         if: failure()
@@ -205,6 +220,7 @@ jobs:
         if: always()
         run: |
           [ -n "$PROJECT" ] && docker compose -p "$PROJECT" -f docker-compose.yml down -v --remove-orphans > /dev/null 2>&1 || true
+          docker image rm "$IMAGE_API:ci-$GITHUB_RUN_ID" "$IMAGE_WEB:ci-$GITHUB_RUN_ID" > /dev/null 2>&1 || true
 
       - name: Log into GHCR
         if: github.event_name != 'pull_request'

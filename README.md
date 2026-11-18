@@ -92,6 +92,11 @@ Le seed est idempotent : il est rejoué à chaque démarrage sans toucher aux no
 
 Dependabot ouvre chaque semaine les mises à jour npm, Docker et GitHub Actions.
 
+**Runner** : comme pour le portfolio, la variable de dépôt `RUNS_ON` choisit le runner (`self-hosted` pour
+le serveur, sinon `ubuntu-latest`). Le workflow est prévu pour un runner partagé : ports hôtes aléatoires
+(services de test et pile de fumée), tags d'images propres au run et supprimés à la fin, Playwright exécuté
+dans son image Docker officielle. Sur le serveur, il suffit de Docker, git et curl.
+
 ### Déploiement (à brancher plus tard)
 
 Les images publiées suffisent : sur le serveur, `docker compose -f docker-compose.yml pull && docker compose -f docker-compose.yml up -d`
