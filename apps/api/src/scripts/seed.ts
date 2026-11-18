@@ -30,9 +30,21 @@ async function main() {
     `Seed terminé : ${created} recettes créées, ${updated} mises à jour (${SEED_RECIPES.length} au total).`,
   );
 
-  if (process.env.IMPORT_MEALDB === 'true') {
-    const { importMealDb } = await import('../seed/mealdb');
-    await importMealDb();
+  // IMPORT_MEALDB=true : import une seule fois (base vide de recettes TheMealDB) ; =force : à chaque démarrage.
+  const mode = process.env.IMPORT_MEALDB;
+  if (mode === 'force' || mode === 'true') {
+    const already = await prisma.recipe.count({ where: { source: 'themealdb' } });
+    if (mode === 'force' || already === 0) {
+      const { importMealDb } = await import('../seed/mealdb');
+      try {
+        await importMealDb();
+      } catch (err) {
+        // Sans Internet ou si TheMealDB est indisponible, l'API démarre quand même avec le seed français.
+        console.warn('Import TheMealDB impossible :', (err as Error).message);
+      }
+    } else {
+      console.log(`TheMealDB déjà importé (${already} recettes) : IMPORT_MEALDB=force pour réimporter.`);
+    }
   }
 }
 
